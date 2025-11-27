@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  ollama:
+    container_name: ollama
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    environment:
+      OLLAMA_NUM_THREADS: 6         # Match your i5-9400 physical cores
+      OLLAMA_MAX_LOADED_MODELS: 1  # Avoid RAM spikes
+      OLLAMA_MAX_QUEUE: 512
+      OLLAMA_KV_CACHE_TYPE: "q8_0" # Best for CPUs
+      OLLAMA_FLASH_ATTENTION: "false"  # Intel CPU = disable
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          cpus: "5"       # reserve 1 core for FastAPI
+          memory: "50g"   # keep some RAM for OS + FastAPI
+
+    # Performance booster (HugePages)
+    sysctls:
+      - vm.nr_hugepages=2048
+
+  fastapi:
+    container_name: security-ai-api
+    build: ./fastapi
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      OLLAMA_URL: "http://ollama:11434"
+      MODEL_NAME: "mixtral"    # or mistral
+    depends_on:
+      - ollama
+    deploy:
+      resources:
+        limits:
+          cpus: "1"       # ensure API always responsive
+          memory: "4g"
+
+volumes:
+  ollama_data:
